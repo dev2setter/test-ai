@@ -1,0 +1,38 @@
+{
+  "name": "sqlite-vss-demo",
+  "version": "1.0.0",
+  "description": "SQLite database with Vector Similarity Search (VSS) support using Node.js",
+  "main": "bin/app.js",
+  "types": "bin/app.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "start": "npm run build && node bin/app.js",
+    "dev": "npm run build:watch",
+    "test": "npm run build && node bin/test.js",
+    "chat": "npm run build && node bin/chat-interface.js",
+    "offline-chat": "npm run build && node bin/offline-chat-simple.js",
+    "api-demo": "npm run build && node bin/offline-llm-api.js"
+  },
+  "keywords": [
+    "sqlite",
+    "vss",
+    "vector",
+    "similarity",
+    "search",
+    "nodejs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^9.2.2",
+    "ollama": "^0.6.0",
+    "openai": "^6.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.9.2",
+    "nodemon": "^3.0.2",
+    "typescript": "^5.9.3"
+  }
+}
