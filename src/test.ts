@@ -3,8 +3,7 @@ import { CrudRepository } from './crud.repo';
 import { SearchRepository } from './search.repo';
 import { 
   insertDummyDataToDatabase, 
-  getDummyDataStats, 
-  generateRandomEmbedding 
+  getDummyDataStats
 } from './dummy-data-loader';
 
 async function runTests(): Promise<void> {
@@ -56,12 +55,18 @@ async function runTests(): Promise<void> {
       console.log('❌ FAILED - No documents found\n');
     }
 
-    // Test 3: Vector similarity search
+    // Test 3: Vector similarity search (using real Ollama embedding)
     console.log('Test 3: Vector similarity search');
-    const queryEmbedding = generateRandomEmbedding(384);
+    
+    // Generate a real embedding for search query using the same model
+    const tempRepo = new CrudRepository(dbInstance, 'nomic-embed-text');
+    const queryText = "machine learning and artificial intelligence";
+    console.log('🔮 Generating query embedding with Ollama...');
+    const queryEmbedding = await (tempRepo as any).generateEmbedding(queryText);
+    
     const similarDocs = searchRepo.searchSimilar(queryEmbedding, 5);
     if (similarDocs.length > 0) {
-      console.log(`✅ PASSED - Found ${similarDocs.length} similar document(s)`);
+      console.log(`✅ PASSED - Found ${similarDocs.length} similar document(s) for: "${queryText}"`);
       similarDocs.forEach((doc, index) => {
         console.log(`   ${index + 1}. "${doc.title}" (Similarity: ${doc.similarity.toFixed(4)})`);
       });
@@ -85,11 +90,9 @@ async function runTests(): Promise<void> {
 
     // Test 5: Insert a new test document
     console.log('Test 5: Insert New Test Document');
-    const testEmbedding = generateRandomEmbedding(384);
-    const docId = crudRepo.insertDocument(
+    const docId = await crudRepo.insertDocument(
       'Test Document Added by Test Suite',
-      'This is a test document for our SQLite VSS implementation added during testing.',
-      testEmbedding
+      'This is a test document for our SQLite VSS implementation added during testing.'
     );
     console.log(`✅ PASSED - Document ID: ${docId}\n`);
 
@@ -124,11 +127,8 @@ async function runTests(): Promise<void> {
   } catch (error) {
     console.error('❌ Test failed with error:', error);
   } finally {
-    // Close database connection
-    if (crudRepo) {
-      crudRepo.close();
-      console.log('🔒 Database connection closed (database.db remains persistent)');
-    }
+    // Database connection will be managed by the database instance
+    console.log('🔒 Test completed (database.db remains persistent)');
   }
 }
 
@@ -138,12 +138,11 @@ async function performanceTest(): Promise<void> {
   
   // Use persistent database for performance test too
   const dbInstance = connectDB();
-  const crudRepo = new CrudRepository(dbInstance);
+  const crudRepo = new CrudRepository(dbInstance, 'nomic-embed-text');
   const searchRepo = new SearchRepository(dbInstance);
   
   try {
     const numDocs = 100;
-    const embeddingDim = 384;
     
     console.log(`Inserting ${numDocs} performance test documents...`);
     const startInsert = Date.now();
@@ -151,18 +150,21 @@ async function performanceTest(): Promise<void> {
     for (let i = 0; i < numDocs; i++) {
       const title = `Performance Test Document ${i + 1}`;
       const content = `This is a performance test document number ${i + 1}. It contains sample content for testing insertion and retrieval performance of our SQLite VSS implementation.`;
-      const embedding = generateRandomEmbedding(embeddingDim);
       
-      crudRepo.insertDocument(title, content, embedding);
+      await crudRepo.insertDocument(title, content);
     }
     
     const insertTime = Date.now() - startInsert;
     console.log(`✅ Insertion completed in ${insertTime}ms (${(insertTime / numDocs).toFixed(2)}ms per doc)\n`);
 
-    // Test search performance
+    // Test search performance (using real Ollama embedding)
     console.log('Performing similarity searches...');
     const startSearch = Date.now();
-    const queryEmbedding = generateRandomEmbedding(embeddingDim);
+    
+    // Generate a real query embedding for performance test
+    const perfTestRepo = new CrudRepository(dbInstance, 'nomic-embed-text');
+    console.log('🔮 Generating performance test query embedding...');
+    const queryEmbedding = await (perfTestRepo as any).generateEmbedding("performance test query");
     
     for (let i = 0; i < 10; i++) {
       searchRepo.searchSimilar(queryEmbedding, 5);
@@ -185,7 +187,6 @@ async function performanceTest(): Promise<void> {
   } catch (error) {
     console.error('❌ Performance test failed:', error);
   } finally {
-    crudRepo.close();
     console.log('🔒 Performance test completed (database.db remains persistent)');
   }
 }// Main execution

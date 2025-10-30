@@ -29,10 +29,11 @@ export interface DatabaseSchema {
 }
 export declare class CrudRepository {
     private db;
-    constructor(dbInstance: Database.Database);
-    getDatabase(): Database.Database;
-    close(): void;
-    insertDocument(title: string, content: string, embedding: number[]): number;
+    private ollama;
+    private embeddingModel;
+    constructor(dbInstance: Database.Database, embeddingModel?: string);
+    private generateEmbedding;
+    insertDocument(title: string, content: string): Promise<number>;
     getAllDocuments(): Document[];
     deleteDocument(id: number): boolean;
     updateDocument(id: number, title?: string, content?: string): boolean;

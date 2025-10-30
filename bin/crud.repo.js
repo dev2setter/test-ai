@@ -1,30 +1,41 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CrudRepository = void 0;
+const ollama_1 = require("ollama");
 // ========================================
 // CRUD REPOSITORY CLASS
 // ========================================
 class CrudRepository {
-    constructor(dbInstance) {
+    constructor(dbInstance, embeddingModel = 'nomic-embed-text') {
         if (!dbInstance) {
             throw new Error('Database instance is required');
         }
         this.db = dbInstance;
+        this.ollama = new ollama_1.Ollama(); // Uses default localhost:11434
+        this.embeddingModel = embeddingModel;
     }
-    // Get the database instance
-    getDatabase() {
-        return this.db;
-    }
-    // Close database connection
-    close() {
-        if (this.db) {
-            this.db.close();
-            console.log('✅ Database connection closed');
+    // Generate embedding using Ollama
+    async generateEmbedding(text) {
+        try {
+            console.log(`🔮 Generating embedding for text using model: ${this.embeddingModel}`);
+            const response = await this.ollama.embeddings({
+                model: this.embeddingModel,
+                prompt: text.trim().substring(0, 4000)
+            });
+            console.log(`✅ Embedding generated successfully (${response.embedding.length} dimensions)`);
+            return response.embedding;
+        }
+        catch (error) {
+            console.error('❌ Error generating embedding with Ollama:', error);
+            throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-    // Insert a document with its vector embedding
-    insertDocument(title, content, embedding) {
+    // Insert a document with its vector embedding (generated using Ollama)
+    async insertDocument(title, content) {
         try {
+            // Generate embedding using Ollama
+            const combinedText = `${title}\n\n${content}`;
+            const embedding = await this.generateEmbedding(combinedText);
             // Use transaction to ensure both inserts succeed or both fail
             const transaction = this.db.transaction(() => {
                 // Insert document first
@@ -43,6 +54,7 @@ class CrudRepository {
                 return docId;
             });
             const docId = transaction();
+            console.log(`✅ Document inserted with ID: ${docId} (embedding: ${embedding.length} dimensions)`);
             return docId;
         }
         catch (error) {

@@ -128,9 +128,8 @@ export class OfflineLLMAPI {
         };
       }
 
-      // Generate embedding for the document
-      const embedding = await (this.chatService as any).generateEmbedding(`${title}\n\n${content}`);
-      const documentId = this.crudRepo.insertDocument(title, content, embedding);
+      // Generate embedding for the document (now handled internally by insertDocument)
+      const documentId = await this.crudRepo.insertDocument(title, content);
       
       return {
         success: true,

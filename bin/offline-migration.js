@@ -120,10 +120,8 @@ class OfflineEmbeddingMigration {
         if (!readiness.ready) {
             throw new Error(readiness.message);
         }
-        // Generate offline embedding
-        const embedding = await this.embeddingService.generateDocumentEmbedding(title, content);
-        // Insert document
-        const docId = crudRepo.insertDocument(title, content, embedding);
+        // Insert document (embedding generated internally)
+        const docId = await crudRepo.insertDocument(title, content);
         console.log(`✅ Added document with offline embedding, ID: ${docId}`);
         return docId;
     }
