@@ -43,9 +43,10 @@ export class OfflineChatService {
     searchRepo: SearchRepository,
     crudRepo: CrudRepository,
     chatModel: string = 'llama3.2:3b',
-    embeddingModel: string = 'nomic-embed-text'
+    embeddingModel: string = 'nomic-embed-text',
+    ollamaInstance?: Ollama
   ) {
-    this.ollama = new Ollama(); // Uses default localhost:11434
+    this.ollama = ollamaInstance || new Ollama(); // Use provided instance or create new one
     this.chatModel = chatModel;
     this.embeddingModel = embeddingModel;
     this.searchRepo = searchRepo;
@@ -377,9 +378,10 @@ export async function startOfflineChat(): Promise<void> {
   try {
     console.log('🚀 Starting offline chat...\n');
     
-    // Initialize database
+    // Initialize database and shared Ollama instance
     const dbInstance = connectDB();
-    const crudRepo = new CrudRepository(dbInstance);
+    const sharedOllama = new Ollama(); // Single shared instance
+    const crudRepo = new CrudRepository(dbInstance, 'nomic-embed-text', sharedOllama);
     const searchRepo = new SearchRepository(dbInstance);
     
     // Check if database has documents
@@ -392,8 +394,8 @@ export async function startOfflineChat(): Promise<void> {
     
     console.log(`📊 Database: ${stats.documents} documents`);
     
-    // Create chat service
-    const chatService = new OfflineChatService(searchRepo, crudRepo);
+    // Create chat service with shared Ollama instance
+    const chatService = new OfflineChatService(searchRepo, crudRepo, 'llama3.2:3b', 'nomic-embed-text', sharedOllama);
     
     // Check if Ollama is available
     const available = await chatService.isAvailable();

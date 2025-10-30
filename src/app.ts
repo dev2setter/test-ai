@@ -1,5 +1,5 @@
 import { connectDB } from './create-db';
-import { DatabaseRepository } from './database.repo';
+import { CrudRepository } from './crud.repo';
 
 // Example usage - call createDB when you need it
 async function main(): Promise<void> {
@@ -8,19 +8,17 @@ async function main(): Promise<void> {
   try {
     // Call connectDB to connect to the persistent database
     const dbInstance = connectDB(); // Always uses database.db
-    const db = new DatabaseRepository(dbInstance);
+    const db = new CrudRepository(dbInstance, 'nomic-embed-text');
     
     console.log('\n🎯 Database is ready! You can now:');
     console.log('   - Insert documents');
     console.log('   - Search for similar documents');
     console.log('   - Perform vector operations');
     
-    // Example: Insert a document
-    const sampleEmbedding = [0.1, 0.2, 0.3, 0.4]; // Small example
-    const docId = db.insertDocument(
+    // Example: Insert a document (embedding generated automatically)
+    const docId = await db.insertDocument(
       'Sample Document',
-      'This is a test document',
-      sampleEmbedding
+      'This is a test document'
     );
     
     console.log(`✅ Inserted document with ID: ${docId}`);
@@ -29,8 +27,8 @@ async function main(): Promise<void> {
     const docs = db.getAllDocuments();
     console.log(`\n📚 Documents in database: ${docs.length}`);
     
-    // Close when done
-    db.close();
+    // Database connection managed by the dbInstance
+    console.log('✅ Application completed successfully');
     
   } catch (error) {
     console.error('❌ Application failed:', error);

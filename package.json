@@ -28,7 +28,9 @@
     "axios": "^1.13.1",
     "better-sqlite3": "^9.2.2",
     "ollama": "^0.6.0",
-    "openai": "^6.7.0"
+    "openai": "^6.7.0",
+    "sqlite-vec": "^0.1.7-alpha.2",
+    "sqlite-vss": "^0.1.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

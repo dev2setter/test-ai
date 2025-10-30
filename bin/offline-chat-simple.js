@@ -45,10 +45,10 @@ const search_repo_1 = require("./search.repo");
 // SIMPLE OFFLINE CHAT SERVICE
 // ========================================
 class OfflineChatService {
-    constructor(searchRepo, crudRepo, chatModel = 'llama3.2:3b', embeddingModel = 'nomic-embed-text') {
+    constructor(searchRepo, crudRepo, chatModel = 'llama3.2:3b', embeddingModel = 'nomic-embed-text', ollamaInstance) {
         this.conversationHistory = [];
         this.context = [];
-        this.ollama = new ollama_1.Ollama(); // Uses default localhost:11434
+        this.ollama = ollamaInstance || new ollama_1.Ollama(); // Use provided instance or create new one
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.searchRepo = searchRepo;
@@ -324,9 +324,10 @@ async function startOfflineChat() {
     const { connectDB } = await Promise.resolve().then(() => __importStar(require('./create-db')));
     try {
         console.log('🚀 Starting offline chat...\n');
-        // Initialize database
+        // Initialize database and shared Ollama instance
         const dbInstance = connectDB();
-        const crudRepo = new crud_repo_1.CrudRepository(dbInstance);
+        const sharedOllama = new ollama_1.Ollama(); // Single shared instance
+        const crudRepo = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text', sharedOllama);
         const searchRepo = new search_repo_1.SearchRepository(dbInstance);
         // Check if database has documents
         const stats = crudRepo.getStats();
@@ -336,8 +337,8 @@ async function startOfflineChat() {
             return;
         }
         console.log(`📊 Database: ${stats.documents} documents`);
-        // Create chat service
-        const chatService = new OfflineChatService(searchRepo, crudRepo);
+        // Create chat service with shared Ollama instance
+        const chatService = new OfflineChatService(searchRepo, crudRepo, 'llama3.2:3b', 'nomic-embed-text', sharedOllama);
         // Check if Ollama is available
         const available = await chatService.isAvailable();
         if (!available) {

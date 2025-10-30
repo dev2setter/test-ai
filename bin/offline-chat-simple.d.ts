@@ -1,3 +1,4 @@
+import { Ollama } from 'ollama';
 import { CrudRepository } from './crud.repo';
 import { SearchRepository } from './search.repo';
 interface ChatMessage {
@@ -22,7 +23,7 @@ export declare class OfflineChatService {
     private crudRepo;
     private conversationHistory;
     private context;
-    constructor(searchRepo: SearchRepository, crudRepo: CrudRepository, chatModel?: string, embeddingModel?: string);
+    constructor(searchRepo: SearchRepository, crudRepo: CrudRepository, chatModel?: string, embeddingModel?: string, ollamaInstance?: Ollama);
     chat(userMessage: string): Promise<ChatResponse>;
     private generateEmbedding;
     checkEmbeddingCompatibility(): Promise<{

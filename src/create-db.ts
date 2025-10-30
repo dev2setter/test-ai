@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import * as sqliteVec from 'sqlite-vec';
 
 // ========================================
 // TYPES AND INTERFACES
@@ -15,25 +16,44 @@ interface TableCreationResult {
 export function connectDB(): Database.Database {
   // Hardcoded persistent database path
   const persistentDbPath = 'database.db';
-  console.log('🔌 Connecting to SQLite Database with VSS Support...\n');
+  console.log('🔌 Connecting to SQLite Database with Vector Extension Support...\n');
   
   try {
     // Create/Connect to SQLite database
     const db = new Database(persistentDbPath);
 
+    // Load sqlite-vec extension for native vector similarity search
+    try {
+      sqliteVec.load(db);
+      console.log('✅ sqlite-vec extension loaded successfully');
+    } catch (error) {
+      console.log('⚠️  sqlite-vec extension failed to load, using JSON fallback');
+    }
+
     console.log('✅ SQLite database connection established');
     
     // Check if tables exist, create if they don't
-    const tablesExist = checkAndCreateTables(db);
+    const result = checkAndCreateTables(db);
     
-    if (tablesExist.created) {
+    // Check VSS availability for logging
+    let vssAvailable = false;
+    try {
+      db.exec('SELECT vec_version()');
+      vssAvailable = true;
+    } catch (error) {
+      vssAvailable = false;
+    }
+    
+    if (result.created) {
       console.log(`✅ Database initialized successfully: ${persistentDbPath}`);
       console.log('📋 Database structure:');
-      console.log('   - Table: documents (id, title, content, created_at)');
-      console.log('   - Table: embeddings (id, document_id, embedding, created_at)');
-      console.log('   - Foreign Key: embeddings.document_id → documents.id');
-      console.log('   - Index: idx_embeddings_document_id for fast lookups');
-      console.log('   - Features: Vector similarity search (cosine & euclidean)');
+      if (vssAvailable) {
+        console.log('   - Table: documents (id, title, content, category, tags, embedding[BLOB], created_at)');
+        console.log('   - Features: Native vector storage in documents table with VSS extension');
+      } else {
+        console.log('   - Table: documents (id, title, content, category, tags, embedding[TEXT], created_at)');
+        console.log('   - Features: JSON embeddings stored in documents table');
+      }
     } else {
       console.log(`✅ Connected to existing database: ${persistentDbPath}`);
       console.log('📊 Using existing tables and data');
@@ -50,62 +70,63 @@ export function connectDB(): Database.Database {
 export function checkAndCreateTables(db: Database.Database): TableCreationResult {
   let tablesCreated = false;
   
+  // Check if VSS extension is loaded
+  let vssAvailable = false;
+  try {
+    db.exec('SELECT vec_version()');
+    vssAvailable = true;
+    console.log('🚀 sqlite-vec extension available - using native vector storage');
+  } catch (error) {
+    console.log('ℹ️ sqlite-vec extension not available, using JSON storage');
+  }
+  
   // Check if documents table exists
   const documentsTableExists = db.prepare(`
     SELECT name FROM sqlite_master 
     WHERE type='table' AND name='documents'
   `).get();
   
-  // Check if embeddings table exists
-  const embeddingsTableExists = db.prepare(`
-    SELECT name FROM sqlite_master 
-    WHERE type='table' AND name='embeddings'
-  `).get();
-  
-  // Create tables only if they don't exist
-  if (!documentsTableExists || !embeddingsTableExists) {
+  // Create table only if it doesn't exist
+  if (!documentsTableExists) {
     console.log('📋 Creating database tables...');
     
-    // Create documents table if it doesn't exist
-    if (!documentsTableExists) {
+    if (vssAvailable) {
+      // Create documents table with BLOB embedding column for VSS
       db.exec(`
         CREATE TABLE documents (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
           content TEXT NOT NULL,
+          category TEXT,
+          tags TEXT,
+          embedding BLOB, -- Store embedding as BLOB for VSS
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      console.log('✅ Created documents table');
-    }
-
-    // Create embeddings table if it doesn't exist
-    if (!embeddingsTableExists) {
+      console.log('✅ Created documents table with BLOB embedding column (VSS mode)');
+    } else {
+      // Create documents table with TEXT embedding column for JSON fallback
       db.exec(`
-        CREATE TABLE embeddings (
+        CREATE TABLE documents (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          document_id INTEGER NOT NULL,
-          embedding TEXT NOT NULL, -- Store as JSON string
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          category TEXT,
+          tags TEXT,
+          embedding TEXT, -- Store embedding as JSON string
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      console.log('✅ Created embeddings table');
+      console.log('✅ Created documents table with TEXT embedding column (JSON mode)');
     }
 
-    // Create index for faster lookups
-    db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_embeddings_document_id 
-      ON embeddings(document_id);
-    `);
-
-    // Enable foreign keys for cascade delete
+    // Enable foreign keys
     db.exec('PRAGMA foreign_keys = ON;');
     
-    console.log('✅ Tables and indexes created successfully');
+    console.log('✅ Table created successfully');
     tablesCreated = true;
   } else {
-    console.log('✅ Database tables already exist');
+    console.log('✅ Database table already exists');
     // Still enable foreign keys
     db.exec('PRAGMA foreign_keys = ON;');
   }

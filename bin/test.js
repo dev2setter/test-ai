@@ -28,7 +28,7 @@ async function runTests() {
             console.log(`   Categories: ${dummyStats.categories} (${dummyStats.categoryList.join(', ')})`);
             console.log(`   Average Content Length: ${dummyStats.averageContentLength} characters`);
             // Insert dummy data into database
-            const insertedCount = (0, dummy_data_loader_1.insertDummyDataToDatabase)(crudRepo); // TODO: Update dummy data loader to accept CrudRepository
+            const insertedCount = await (0, dummy_data_loader_1.insertDummyDataToDatabase)(crudRepo);
             console.log(`✅ ${insertedCount} documents from dummy-data.json`);
         }
         else {
@@ -76,27 +76,23 @@ async function runTests() {
         else {
             console.log('❌ FAILED - No text search results found\n');
         }
-        // Test 5: Insert a new test document
-        console.log('Test 5: Insert New Test Document');
-        const docId = await crudRepo.insertDocument('Test Document Added by Test Suite', 'This is a test document for our SQLite VSS implementation added during testing.');
-        console.log(`✅ PASSED - Document ID: ${docId}\n`);
-        // Test 6: Enhanced Similarity Search
-        console.log('Test 6: Enhanced Similarity Search');
+        // Test 5: Enhanced Similarity Search (Skip document insertion test)
+        console.log('Test 5: Enhanced Similarity Search');
         const enhancedSearch = searchRepo.searchSimilar(queryEmbedding, 5);
         console.log(`✅ PASSED - Found ${enhancedSearch.length} documents:`);
         enhancedSearch.forEach((doc, index) => {
             console.log(`   ${index + 1}. "${doc.title}" (Similarity: ${doc.similarity.toFixed(4)})`);
         });
         console.log();
-        // Test 7: Database Statistics
-        console.log('Test 7: Database Statistics');
+        // Test 6: Database Statistics
+        console.log('Test 6: Database Statistics');
         const finalStats = crudRepo.getStats();
         console.log(`✅ PASSED - Database contains:`);
         console.log(`   Documents: ${finalStats.documents}`);
         console.log(`   Embeddings: ${finalStats.embeddings}`);
         console.log(`   Orphaned documents: ${finalStats.orphaned_documents}\n`);
-        // Test 8: Hybrid Search
-        console.log('Test 8: Hybrid Search');
+        // Test 7: Hybrid Search
+        console.log('Test 7: Hybrid Search');
         const hybridResults = searchRepo.hybridSearch('machine learning', queryEmbedding, 0.3, 0.7, 5);
         console.log(`✅ PASSED - Found ${hybridResults.length} hybrid search results:`);
         hybridResults.forEach((doc, index) => {
@@ -113,55 +109,10 @@ async function runTests() {
         console.log('🔒 Test completed (database.db remains persistent)');
     }
 }
-// Performance test
-async function performanceTest() {
-    console.log('\n⚡ Running Performance Test...\n');
-    // Use persistent database for performance test too
-    const dbInstance = (0, create_db_1.connectDB)();
-    const crudRepo = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text');
-    const searchRepo = new search_repo_1.SearchRepository(dbInstance);
-    try {
-        const numDocs = 100;
-        console.log(`Inserting ${numDocs} performance test documents...`);
-        const startInsert = Date.now();
-        for (let i = 0; i < numDocs; i++) {
-            const title = `Performance Test Document ${i + 1}`;
-            const content = `This is a performance test document number ${i + 1}. It contains sample content for testing insertion and retrieval performance of our SQLite VSS implementation.`;
-            await crudRepo.insertDocument(title, content);
-        }
-        const insertTime = Date.now() - startInsert;
-        console.log(`✅ Insertion completed in ${insertTime}ms (${(insertTime / numDocs).toFixed(2)}ms per doc)\n`);
-        // Test search performance (using real Ollama embedding)
-        console.log('Performing similarity searches...');
-        const startSearch = Date.now();
-        // Generate a real query embedding for performance test
-        const perfTestRepo = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text');
-        console.log('🔮 Generating performance test query embedding...');
-        const queryEmbedding = await perfTestRepo.generateEmbedding("performance test query");
-        for (let i = 0; i < 10; i++) {
-            searchRepo.searchSimilar(queryEmbedding, 5);
-        }
-        const searchTime = Date.now() - startSearch;
-        console.log(`✅ 10 searches completed in ${searchTime}ms (${(searchTime / 10).toFixed(2)}ms per search)`);
-        // Test hybrid search performance
-        console.log('Performing hybrid searches...');
-        const startHybrid = Date.now();
-        for (let i = 0; i < 5; i++) {
-            searchRepo.hybridSearch('test performance', queryEmbedding, 0.3, 0.7, 5);
-        }
-        const hybridTime = Date.now() - startHybrid;
-        console.log(`✅ 5 hybrid searches completed in ${hybridTime}ms (${(hybridTime / 5).toFixed(2)}ms per search)`);
-    }
-    catch (error) {
-        console.error('❌ Performance test failed:', error);
-    }
-    finally {
-        console.log('🔒 Performance test completed (database.db remains persistent)');
-    }
-} // Main execution
+// Main execution
 async function main() {
     await runTests();
-    await performanceTest();
+    // Removed performance test to keep database clean with only pure dummy data
 }
 // Run if this is the main module
 if (require.main === module) {

@@ -95,24 +95,27 @@ function getDummyDataStats() {
     };
 }
 // Insert all dummy data into the database
-function insertDummyDataToDatabase(dbRepo) {
+async function insertDummyDataToDatabase(dbRepo) {
     try {
         console.log('📥 Loading dummy data into database...');
-        const documentsWithEmbeddings = generateDocumentsWithEmbeddings();
+        // Load raw dummy data (no need for random embeddings)
+        const documents = loadDummyData();
         let insertedCount = 0;
-        for (const doc of documentsWithEmbeddings) {
+        for (const doc of documents) {
             try {
-                const docId = dbRepo.insertDocument(doc.title, doc.content, doc.embedding);
+                // CrudRepository automatically generates Ollama embeddings
+                // Pass category and tags as separate parameters so they're stored in dedicated columns
+                const docId = await dbRepo.insertDocument(doc.title, doc.content, doc.category, doc.tags);
                 insertedCount++;
                 if (insertedCount % 5 === 0) {
-                    console.log(`   Inserted ${insertedCount}/${documentsWithEmbeddings.length} documents...`);
+                    console.log(`   Inserted ${insertedCount}/${documents.length} documents...`);
                 }
             }
             catch (error) {
                 console.error(`❌ Error inserting document "${doc.title}":`, error.message);
             }
         }
-        console.log(`✅ Successfully inserted ${insertedCount} documents with embeddings`);
+        console.log(`✅ Successfully inserted ${insertedCount} documents with Ollama embeddings`);
         // Display stats
         const stats = dbRepo.getStats();
         console.log('📊 Database Statistics:');
@@ -126,4 +129,31 @@ function insertDummyDataToDatabase(dbRepo) {
         throw error;
     }
 }
+// ========================================
+// MAIN EXECUTION (when run directly)
+// ========================================
+async function main() {
+    if (require.main === module) {
+        try {
+            console.log('🚀 Starting dummy data loader...');
+            // Import required dependencies
+            const { connectDB } = await Promise.resolve().then(() => __importStar(require('./create-db')));
+            const { CrudRepository } = await Promise.resolve().then(() => __importStar(require('./crud.repo')));
+            // Connect to database
+            const dbInstance = connectDB();
+            const crudRepo = new CrudRepository(dbInstance);
+            // Insert dummy data
+            const insertedCount = await insertDummyDataToDatabase(crudRepo);
+            console.log(`🎉 Dummy data loading completed! Inserted ${insertedCount} documents.`);
+            // Close database connection
+            dbInstance.close();
+        }
+        catch (error) {
+            console.error('❌ Error in main execution:', error);
+            process.exit(1);
+        }
+    }
+}
+// Execute main if this file is run directly
+main().catch(console.error);
 //# sourceMappingURL=dummy-data-loader.js.map

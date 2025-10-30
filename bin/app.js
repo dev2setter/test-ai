@@ -1,27 +1,26 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const create_db_1 = require("./create-db");
-const database_repo_1 = require("./database.repo");
+const crud_repo_1 = require("./crud.repo");
 // Example usage - call createDB when you need it
 async function main() {
     console.log('📝 Starting application...\n');
     try {
         // Call connectDB to connect to the persistent database
         const dbInstance = (0, create_db_1.connectDB)(); // Always uses database.db
-        const db = new database_repo_1.DatabaseRepository(dbInstance);
+        const db = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text');
         console.log('\n🎯 Database is ready! You can now:');
         console.log('   - Insert documents');
         console.log('   - Search for similar documents');
         console.log('   - Perform vector operations');
-        // Example: Insert a document
-        const sampleEmbedding = [0.1, 0.2, 0.3, 0.4]; // Small example
-        const docId = db.insertDocument('Sample Document', 'This is a test document', sampleEmbedding);
+        // Example: Insert a document (embedding generated automatically)
+        const docId = await db.insertDocument('Sample Document', 'This is a test document');
         console.log(`✅ Inserted document with ID: ${docId}`);
         // Get all documents
         const docs = db.getAllDocuments();
         console.log(`\n📚 Documents in database: ${docs.length}`);
-        // Close when done
-        db.close();
+        // Database connection managed by the dbInstance
+        console.log('✅ Application completed successfully');
     }
     catch (error) {
         console.error('❌ Application failed:', error);

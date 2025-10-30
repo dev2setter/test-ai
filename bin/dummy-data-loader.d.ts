@@ -1,4 +1,4 @@
-import { DatabaseRepository } from './database.repo';
+import { CrudRepository } from './crud.repo';
 export interface DummyDocument {
     title: string;
     content: string;
@@ -23,5 +23,5 @@ export declare function loadDummyData(): DummyDocument[];
 export declare function generateRandomEmbedding(dimensions?: number): number[];
 export declare function generateDocumentsWithEmbeddings(embeddingSize?: number): DummyDocumentWithEmbedding[];
 export declare function getDummyDataStats(): DummyDataStats;
-export declare function insertDummyDataToDatabase(dbRepo: DatabaseRepository): number;
+export declare function insertDummyDataToDatabase(dbRepo: CrudRepository): Promise<number>;
 //# sourceMappingURL=dummy-data-loader.d.ts.map

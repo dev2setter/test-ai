@@ -30,12 +30,23 @@ export interface HybridSearchResult extends DocumentWithSimilarity {
 
 export class SearchRepository {
   private db: Database.Database;
+  private vssAvailable: boolean = false;
 
   constructor(dbInstance: Database.Database) {
     if (!dbInstance) {
       throw new Error('Database instance is required');
     }
     this.db = dbInstance;
+    
+    // Check if VSS extension is available
+    try {
+      this.db.exec('SELECT vec_version()');
+      this.vssAvailable = true;
+      console.log('🚀 SearchRepository: sqlite-vec extension detected');
+    } catch (error) {
+      this.vssAvailable = false;
+      console.log('📦 SearchRepository: Using JavaScript similarity calculations');
+    }
   }
 
   // Calculate cosine similarity between two vectors
@@ -79,20 +90,85 @@ export class SearchRepository {
     filters?: SearchFilters
   ): DocumentWithSimilarity[] {
     try {
+      if (this.vssAvailable) {
+        // Use sqlite-vec extension for native vector search on documents table
+        console.log('🚀 Using sqlite-vec native search on documents table');
+        
+        // Convert query embedding to buffer for VSS
+        const queryBuffer = new Float32Array(queryEmbedding);
+        const queryBlob = Buffer.from(queryBuffer.buffer);
+        
+        const query = `
+          SELECT 
+            id, 
+            title, 
+            content, 
+            category,
+            tags,
+            created_at,
+            vec_distance_cosine(embedding, ?) as distance
+          FROM documents
+          WHERE embedding IS NOT NULL
+          ORDER BY distance ASC
+          LIMIT ?
+        `;
+        
+        const stmt = this.db.prepare(query);
+        const results = stmt.all(queryBlob, limit) as Array<{
+          id: number;
+          title: string;
+          content: string;
+          category?: string;
+          tags?: string;
+          created_at: string;
+          distance: number;
+        }>;
+        
+        return results.map(row => ({
+          id: row.id,
+          title: row.title,
+          content: row.content,
+          category: row.category,
+          tags: row.tags,
+          created_at: row.created_at,
+          similarity: 1 - row.distance, // Convert distance to similarity
+          distance: row.distance
+        }));
+      } else {
+        // Fallback to JavaScript-based similarity calculation
+        console.log('📦 Using JavaScript similarity calculation');
+        return this.searchSimilarJS(queryEmbedding, limit, useCosineSimilarity, filters);
+      }
+    } catch (error) {
+      console.error('❌ Error in vector search:', error);
+      throw error;
+    }
+  }
+
+  // JavaScript-based similarity search (fallback)
+  private searchSimilarJS(
+    queryEmbedding: number[], 
+    limit: number = 5, 
+    useCosineSimilarity: boolean = true,
+    filters?: SearchFilters
+  ): DocumentWithSimilarity[] {
+    try {
       // Build base query with optional filters
       let query = `
         SELECT 
           d.id, 
           d.title, 
-          d.content, 
+          d.content,
+          d.category,
+          d.tags,
           d.created_at, 
-          e.embedding 
+          d.embedding 
         FROM documents d 
-        JOIN embeddings e ON d.id = e.document_id
+        WHERE d.embedding IS NOT NULL
       `;
       
       const queryParams: any[] = [];
-      const whereConditions: string[] = [];
+      const whereConditions: string[] = ['d.embedding IS NOT NULL'];
       
       // Add date filters if provided
       if (filters?.startDate && filters?.endDate) {
@@ -100,15 +176,25 @@ export class SearchRepository {
         queryParams.push(filters.startDate, filters.endDate);
       }
       
-      if (whereConditions.length > 0) {
-        query += ' WHERE ' + whereConditions.join(' AND ');
+      if (whereConditions.length > 1) {
+        query = query.replace('WHERE d.embedding IS NOT NULL', 'WHERE ' + whereConditions.join(' AND '));
       }
       
       const stmt = this.db.prepare(query);
-      const allDocs = stmt.all(...queryParams) as Array<Document & { embedding: string }>;
+      const allDocs = stmt.all(...queryParams) as Array<Document & { embedding: Buffer | string }>;
       
       const similarities: DocumentWithSimilarity[] = allDocs.map(doc => {
-        const docEmbedding: number[] = JSON.parse(doc.embedding);
+        let docEmbedding: number[];
+        
+        // Handle both BLOB and JSON embeddings
+        if (Buffer.isBuffer(doc.embedding)) {
+          // Convert BLOB to number array
+          const float32Array = new Float32Array(doc.embedding.buffer, doc.embedding.byteOffset, doc.embedding.byteLength / 4);
+          docEmbedding = Array.from(float32Array);
+        } else {
+          // Parse JSON string
+          docEmbedding = JSON.parse(doc.embedding as string);
+        }
         
         let similarity: number;
         if (useCosineSimilarity) {
@@ -117,6 +203,8 @@ export class SearchRepository {
             id: doc.id,
             title: doc.title,
             content: doc.content,
+            category: doc.category,
+            tags: doc.tags,
             created_at: doc.created_at,
             similarity: similarity,
             distance: 1 - similarity
@@ -127,6 +215,8 @@ export class SearchRepository {
             id: doc.id,
             title: doc.title,
             content: doc.content,
+            category: doc.category,
+            tags: doc.tags,
             created_at: doc.created_at,
             similarity: 1 / (1 + distance),
             distance: distance
@@ -155,16 +245,16 @@ export class SearchRepository {
   searchByText(searchTerm: string, limit: number = 10): Document[] {
     try {
       const query = `
-        SELECT d.id, d.title, d.content, d.created_at
+        SELECT d.id, d.title, d.content, d.category, d.tags, d.created_at
         FROM documents d
-        WHERE d.title LIKE ? OR d.content LIKE ?
+        WHERE d.title LIKE ? OR d.content LIKE ? OR d.category LIKE ? OR d.tags LIKE ?
         ORDER BY d.created_at DESC
         LIMIT ?
       `;
       
       const searchPattern = `%${searchTerm}%`;
       const stmt = this.db.prepare(query);
-      return stmt.all(searchPattern, searchPattern, limit) as Document[];
+      return stmt.all(searchPattern, searchPattern, searchPattern, searchPattern, limit) as Document[];
     } catch (error) {
       console.error('❌ Error searching by text:', error);
       throw error;
@@ -178,14 +268,14 @@ export class SearchRepository {
       const params: string[] = [];
       
       searchTerms.forEach(term => {
-        conditions.push('(d.title LIKE ? OR d.content LIKE ?)');
+        conditions.push('(d.title LIKE ? OR d.content LIKE ? OR d.category LIKE ? OR d.tags LIKE ?)');
         const pattern = `%${term}%`;
-        params.push(pattern, pattern);
+        params.push(pattern, pattern, pattern, pattern);
       });
       
       const whereClause = conditions.join(` ${operator} `);
       const query = `
-        SELECT d.id, d.title, d.content, d.created_at
+        SELECT d.id, d.title, d.content, d.category, d.tags, d.created_at
         FROM documents d
         WHERE ${whereClause}
         ORDER BY d.created_at DESC

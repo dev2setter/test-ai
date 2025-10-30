@@ -9,6 +9,8 @@ export interface Document {
   id: number;
   title: string;
   content: string;
+  category?: string;
+  tags?: string;
   created_at: string;
 }
 
@@ -45,14 +47,29 @@ export class CrudRepository {
   private db: Database.Database;
   private ollama: Ollama;
   private embeddingModel: string;
+  private vssAvailable: boolean = false;
 
-  constructor(dbInstance: Database.Database, embeddingModel: string = 'nomic-embed-text') {
+  constructor(
+    dbInstance: Database.Database, 
+    embeddingModel: string = 'nomic-embed-text',
+    ollamaInstance?: Ollama
+  ) {
     if (!dbInstance) {
       throw new Error('Database instance is required');
     }
     this.db = dbInstance;
-    this.ollama = new Ollama(); // Uses default localhost:11434
+    this.ollama = ollamaInstance || new Ollama(); // Use provided instance or create new one
     this.embeddingModel = embeddingModel;
+    
+    // Check if VSS extension is available
+    try {
+      this.db.exec('SELECT vec_version()');
+      this.vssAvailable = true;
+      console.log('🚀 sqlite-vec extension detected - using native vector operations');
+    } catch (error) {
+      this.vssAvailable = false;
+      console.log('📦 Using JSON embedding storage (sqlite-vec extension not available)');
+    }
   }
 
   // Generate embedding using Ollama
@@ -74,37 +91,45 @@ export class CrudRepository {
   }
 
   // Insert a document with its vector embedding (generated using Ollama)
-  async insertDocument(title: string, content: string): Promise<number> {
+  async insertDocument( title: string, content: string,  category?: string, tags?: string[] ): Promise<number> {
     try {
-      // Generate embedding using Ollama
-      const combinedText = `${title}\n\n${content}`;
+      // Generate embedding using Ollama - include all metadata for richer embeddings
+      const categoryText = category ? `\nCategory: ${category}` : '';
+      const tagsText = tags && tags.length > 0 ? `\nTags: ${tags.join(', ')}` : '';
+      const combinedText = `${title}\n\n${content}${categoryText}${tagsText}`;
       const embedding = await this.generateEmbedding(combinedText);
 
-      // Use transaction to ensure both inserts succeed or both fail
-      const transaction = this.db.transaction(() => {
-        // Insert document first
-        const insertDoc = this.db.prepare(`
-          INSERT INTO documents (title, content) 
-          VALUES (?, ?)
-        `);
-        
-        const docResult = insertDoc.run(title, content);
-        const docId = docResult.lastInsertRowid as number;
+      const tagsString = tags ? tags.join(', ') : null;
 
-        // Insert embedding with document ID reference
-        const insertEmbedding = this.db.prepare(`
-          INSERT INTO embeddings (document_id, embedding) 
-          VALUES (?, ?)
+      if (this.vssAvailable) {
+        // Use VSS extension: store embedding as BLOB in documents table
+        const insertDoc = this.db.prepare(`
+          INSERT INTO documents (title, content, category, tags, embedding) 
+          VALUES (?, ?, ?, ?, ?)
         `);
         
-        insertEmbedding.run(docId, JSON.stringify(embedding));
+        const embeddingBuffer = new Float32Array(embedding);
+        const docResult = insertDoc.run(title, content, category || null, tagsString, Buffer.from(embeddingBuffer.buffer));
+        const docId = docResult.lastInsertRowid as number;
         
+        console.log(`🚀 VSS: Vector stored as BLOB (${embedding.length} dimensions)`);
+        console.log(`✅ Document inserted with ID: ${docId} using VSS storage`);
         return docId;
-      });
-      
-      const docId = transaction();
-      console.log(`✅ Document inserted with ID: ${docId} (embedding: ${embedding.length} dimensions)`);
-      return docId;
+      } else {
+        // Fallback to JSON storage in documents table
+        const insertDoc = this.db.prepare(`
+          INSERT INTO documents (title, content, category, tags, embedding) 
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        
+        const embeddingString = JSON.stringify(embedding);
+        const docResult = insertDoc.run(title, content, category || null, tagsString, embeddingString);
+        const docId = docResult.lastInsertRowid as number;
+        
+        console.log(`📦 JSON: Vector stored as JSON string (${embedding.length} dimensions)`);
+        console.log(`✅ Document inserted with ID: ${docId} using JSON storage`);
+        return docId;
+      }
     } catch (error) {
       console.error('❌ Error inserting document:', error);
       throw error;
@@ -114,7 +139,7 @@ export class CrudRepository {
   // Get all documents
   getAllDocuments(): Document[] {
     try {
-      const stmt = this.db.prepare('SELECT id, title, content, created_at FROM documents ORDER BY created_at DESC');
+      const stmt = this.db.prepare('SELECT id, title, content, category, tags, created_at FROM documents ORDER BY created_at DESC');
       return stmt.all() as Document[];
     } catch (error) {
       console.error('❌ Error getting documents:', error);
@@ -190,17 +215,18 @@ export class CrudRepository {
     try {
       const stmt = this.db.prepare(`
         SELECT 
-          d.id, 
-          d.title, 
-          d.content, 
-          d.created_at, 
-          e.embedding 
-        FROM documents d 
-        LEFT JOIN embeddings e ON d.id = e.document_id 
-        WHERE d.id = ?
+          id, 
+          title, 
+          content, 
+          category,
+          tags,
+          embedding,
+          created_at
+        FROM documents 
+        WHERE id = ?
       `);
       
-      const doc = stmt.get(id) as (Document & { embedding?: string }) | undefined;
+      const doc = stmt.get(id) as (Document & { embedding?: Buffer | string }) | undefined;
       
       if (!doc) return null;
       
@@ -208,11 +234,20 @@ export class CrudRepository {
         id: doc.id,
         title: doc.title,
         content: doc.content,
+        category: doc.category,
+        tags: doc.tags,
         created_at: doc.created_at
       };
       
       if (doc.embedding) {
-        result.embedding = JSON.parse(doc.embedding);
+        if (this.vssAvailable && Buffer.isBuffer(doc.embedding)) {
+          // Convert BLOB back to number array
+          const float32Array = new Float32Array(doc.embedding.buffer, doc.embedding.byteOffset, doc.embedding.byteLength / 4);
+          result.embedding = Array.from(float32Array);
+        } else if (typeof doc.embedding === 'string') {
+          // Parse JSON string
+          result.embedding = JSON.parse(doc.embedding);
+        }
       }
       
       return result;
@@ -225,11 +260,18 @@ export class CrudRepository {
   // Get embedding for a specific document
   getEmbeddingByDocumentId(documentId: number): number[] | null {
     try {
-      const stmt = this.db.prepare('SELECT embedding FROM embeddings WHERE document_id = ?');
-      const result = stmt.get(documentId) as { embedding: string } | undefined;
+      const stmt = this.db.prepare('SELECT embedding FROM documents WHERE id = ?');
+      const result = stmt.get(documentId) as { embedding: Buffer | string } | undefined;
       
-      if (result) {
-        return JSON.parse(result.embedding);
+      if (result && result.embedding) {
+        if (this.vssAvailable && Buffer.isBuffer(result.embedding)) {
+          // Convert BLOB back to number array
+          const float32Array = new Float32Array(result.embedding.buffer, result.embedding.byteOffset, result.embedding.byteLength / 4);
+          return Array.from(float32Array);
+        } else if (typeof result.embedding === 'string') {
+          // Parse JSON string
+          return JSON.parse(result.embedding);
+        }
       }
       
       return null;
@@ -243,17 +285,27 @@ export class CrudRepository {
   updateEmbedding(documentId: number, newEmbedding: number[]): boolean {
     try {
       const stmt = this.db.prepare(`
-        UPDATE embeddings 
-        SET embedding = ?, created_at = CURRENT_TIMESTAMP 
-        WHERE document_id = ?
+        UPDATE documents 
+        SET embedding = ? 
+        WHERE id = ?
       `);
       
-      const result = stmt.run(JSON.stringify(newEmbedding), documentId);
+      let embeddingData;
+      if (this.vssAvailable) {
+        // Store as BLOB for VSS
+        const embeddingBuffer = new Float32Array(newEmbedding);
+        embeddingData = Buffer.from(embeddingBuffer.buffer);
+      } else {
+        // Store as JSON string
+        embeddingData = JSON.stringify(newEmbedding);
+      }
+      
+      const result = stmt.run(embeddingData, documentId);
       
       if (result.changes > 0) {
         console.log(`✅ Embedding updated for document ID: ${documentId}`);
       } else {
-        console.log(`⚠️  No embedding found for document ID: ${documentId}`);
+        console.log(`⚠️  No document found with ID: ${documentId}`);
       }
       
       return result.changes > 0;
@@ -267,7 +319,7 @@ export class CrudRepository {
   getStats(): DatabaseStats {
     try {
       const docCount = this.db.prepare('SELECT COUNT(*) as count FROM documents').get() as { count: number };
-      const embeddingCount = this.db.prepare('SELECT COUNT(*) as count FROM embeddings').get() as { count: number };
+      const embeddingCount = this.db.prepare('SELECT COUNT(*) as count FROM documents WHERE embedding IS NOT NULL').get() as { count: number };
       
       return {
         documents: docCount.count,
@@ -286,20 +338,16 @@ export class CrudRepository {
       return {
         tables: {
           documents: {
-            columns: ['id', 'title', 'content', 'created_at'],
-            description: 'Main documents table containing titles and content'
+            columns: ['id', 'title', 'content', 'category', 'tags', 'embedding', 'created_at'],
+            description: 'Main documents table containing titles, content, metadata, and embeddings'
           },
           embeddings: {
-            columns: ['id', 'document_id', 'embedding', 'created_at'],
-            description: 'Vector embeddings linked to documents via document_id'
+            columns: [],
+            description: 'Deprecated - embeddings now stored directly in documents table'
           }
         },
-        relationships: [
-          'embeddings.document_id → documents.id (Foreign Key with CASCADE DELETE)'
-        ],
-        indexes: [
-          'idx_embeddings_document_id on embeddings(document_id)'
-        ]
+        relationships: [],
+        indexes: []
       };
     } catch (error) {
       console.error('❌ Error getting database schema:', error);

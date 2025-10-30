@@ -18,10 +18,12 @@ export interface HybridSearchResult extends DocumentWithSimilarity {
 }
 export declare class SearchRepository {
     private db;
+    private vssAvailable;
     constructor(dbInstance: Database.Database);
     cosineSimilarity(vecA: number[], vecB: number[]): number;
     euclideanDistance(vecA: number[], vecB: number[]): number;
     searchSimilar(queryEmbedding: number[], limit?: number, useCosineSimilarity?: boolean, filters?: SearchFilters): DocumentWithSimilarity[];
+    private searchSimilarJS;
     searchByText(searchTerm: string, limit?: number): Document[];
     searchByTextAdvanced(searchTerms: string[], operator?: 'AND' | 'OR', limit?: number): Document[];
     hybridSearch(query: string, queryEmbedding: number[], textWeight?: number, semanticWeight?: number, limit?: number): HybridSearchResult[];
