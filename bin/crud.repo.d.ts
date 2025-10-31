@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { Ollama } from 'ollama';
+import { EmbeddingsService } from './embeddings.service';
 export interface Document {
     id: number;
     title: string;
@@ -32,11 +32,11 @@ export interface DatabaseSchema {
 }
 export declare class CrudRepository {
     private db;
-    private ollama;
-    private embeddingModel;
+    private embeddingsService;
     private vssAvailable;
-    constructor(dbInstance: Database.Database, embeddingModel?: string, ollamaInstance?: Ollama);
-    private generateEmbedding;
+    constructor(dbInstance: Database.Database, embeddingsService: EmbeddingsService);
+    generateQueryEmbedding(text: string): Promise<number[]>;
+    getEmbeddingsService(): EmbeddingsService;
     insertDocument(title: string, content: string, category?: string, tags?: string[]): Promise<number>;
     getAllDocuments(): Document[];
     deleteDocument(id: number): boolean;

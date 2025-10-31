@@ -41,6 +41,7 @@ exports.startOfflineChat = startOfflineChat;
 const ollama_1 = require("ollama");
 const crud_repo_1 = require("./crud.repo");
 const search_repo_1 = require("./search.repo");
+const embeddings_service_1 = require("./embeddings.service");
 // ========================================
 // SIMPLE OFFLINE CHAT SERVICE
 // ========================================
@@ -327,7 +328,10 @@ async function startOfflineChat() {
         // Initialize database and shared Ollama instance
         const dbInstance = connectDB();
         const sharedOllama = new ollama_1.Ollama(); // Single shared instance
-        const crudRepo = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text', sharedOllama);
+        // Create embeddings service with shared Ollama instance
+        const embeddingsService = new embeddings_service_1.EmbeddingsService('nomic-embed-text', sharedOllama);
+        // Create repositories
+        const crudRepo = new crud_repo_1.CrudRepository(dbInstance, embeddingsService);
         const searchRepo = new search_repo_1.SearchRepository(dbInstance);
         // Check if database has documents
         const stats = crudRepo.getStats();

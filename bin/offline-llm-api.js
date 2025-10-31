@@ -9,6 +9,7 @@ exports.demonstrateOfflineLLMAPI = demonstrateOfflineLLMAPI;
 const create_db_1 = require("./create-db");
 const crud_repo_1 = require("./crud.repo");
 const search_repo_1 = require("./search.repo");
+const embeddings_service_1 = require("./embeddings.service");
 const offline_chat_simple_1 = require("./offline-chat-simple");
 // ========================================
 // OFFLINE LLM API CLASS
@@ -17,7 +18,10 @@ class OfflineLLMAPI {
     constructor() {
         // Initialize database and repositories
         const dbInstance = (0, create_db_1.connectDB)();
-        this.crudRepo = new crud_repo_1.CrudRepository(dbInstance);
+        // Create embeddings service
+        const embeddingsService = new embeddings_service_1.EmbeddingsService('nomic-embed-text');
+        // Create repositories
+        this.crudRepo = new crud_repo_1.CrudRepository(dbInstance, embeddingsService);
         this.searchRepo = new search_repo_1.SearchRepository(dbInstance);
     }
     // Initialize offline chat (requires Ollama)

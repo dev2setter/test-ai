@@ -6,6 +6,7 @@
 import { connectDB } from './create-db';
 import { CrudRepository } from './crud.repo';
 import { SearchRepository } from './search.repo';
+import { EmbeddingsService } from './embeddings.service';
 import { OfflineChatService } from './offline-chat-simple';
 
 // ========================================
@@ -20,7 +21,12 @@ export class OfflineLLMAPI {
   constructor() {
     // Initialize database and repositories
     const dbInstance = connectDB();
-    this.crudRepo = new CrudRepository(dbInstance);
+    
+    // Create embeddings service
+    const embeddingsService = new EmbeddingsService('nomic-embed-text');
+    
+    // Create repositories
+    this.crudRepo = new CrudRepository(dbInstance, embeddingsService);
     this.searchRepo = new SearchRepository(dbInstance);
   }
 

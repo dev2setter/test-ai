@@ -1,19 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CrudRepository = void 0;
-const ollama_1 = require("ollama");
 // ========================================
 // CRUD REPOSITORY CLASS
 // ========================================
 class CrudRepository {
-    constructor(dbInstance, embeddingModel = 'nomic-embed-text', ollamaInstance) {
+    constructor(dbInstance, embeddingsService) {
         this.vssAvailable = false;
         if (!dbInstance) {
             throw new Error('Database instance is required');
         }
+        if (!embeddingsService) {
+            throw new Error('EmbeddingsService instance is required');
+        }
         this.db = dbInstance;
-        this.ollama = ollamaInstance || new ollama_1.Ollama(); // Use provided instance or create new one
-        this.embeddingModel = embeddingModel;
+        this.embeddingsService = embeddingsService;
         // Check if VSS extension is available
         try {
             this.db.exec('SELECT vec_version()');
@@ -25,30 +26,19 @@ class CrudRepository {
             console.log('📦 Using JSON embedding storage (sqlite-vec extension not available)');
         }
     }
-    // Generate embedding using Ollama
-    async generateEmbedding(text) {
-        try {
-            console.log(`🔮 Generating embedding for text using model: ${this.embeddingModel}`);
-            const response = await this.ollama.embeddings({
-                model: this.embeddingModel,
-                prompt: text.trim().substring(0, 4000)
-            });
-            console.log(`✅ Embedding generated successfully (${response.embedding.length} dimensions)`);
-            return response.embedding;
-        }
-        catch (error) {
-            console.error('❌ Error generating embedding with Ollama:', error);
-            throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+    // Public method to generate embeddings for search queries
+    async generateQueryEmbedding(text) {
+        return this.embeddingsService.generateQueryEmbedding(text);
+    }
+    // Get the embeddings service instance
+    getEmbeddingsService() {
+        return this.embeddingsService;
     }
     // Insert a document with its vector embedding (generated using Ollama)
     async insertDocument(title, content, category, tags) {
         try {
-            // Generate embedding using Ollama - include all metadata for richer embeddings
-            const categoryText = category ? `\nCategory: ${category}` : '';
-            const tagsText = tags && tags.length > 0 ? `\nTags: ${tags.join(', ')}` : '';
-            const combinedText = `${title}\n\n${content}${categoryText}${tagsText}`;
-            const embedding = await this.generateEmbedding(combinedText);
+            // Generate embedding using EmbeddingsService - include all metadata for richer embeddings
+            const embedding = await this.embeddingsService.generateDocumentEmbedding(title, content, category, tags);
             const tagsString = tags ? tags.join(', ') : null;
             if (this.vssAvailable) {
                 // Use VSS extension: store embedding as BLOB in documents table

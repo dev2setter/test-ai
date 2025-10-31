@@ -2,13 +2,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const create_db_1 = require("./create-db");
 const crud_repo_1 = require("./crud.repo");
+const embeddings_service_1 = require("./embeddings.service");
 // Example usage - call createDB when you need it
 async function main() {
     console.log('📝 Starting application...\n');
     try {
         // Call connectDB to connect to the persistent database
         const dbInstance = (0, create_db_1.connectDB)(); // Always uses database.db
-        const db = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text');
+        // Create embeddings service
+        const embeddingsService = new embeddings_service_1.EmbeddingsService('nomic-embed-text');
+        // Create CRUD repository with embeddings service
+        const db = new crud_repo_1.CrudRepository(dbInstance, embeddingsService);
         console.log('\n🎯 Database is ready! You can now:');
         console.log('   - Insert documents');
         console.log('   - Search for similar documents');

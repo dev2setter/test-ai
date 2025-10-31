@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { Ollama } from 'ollama';
+import { EmbeddingsService } from './embeddings.service';
 
 // ========================================
 // TYPES AND INTERFACES
@@ -45,21 +46,21 @@ export interface DatabaseSchema {
 
 export class CrudRepository {
   private db: Database.Database;
-  private ollama: Ollama;
-  private embeddingModel: string;
+  private embeddingsService: EmbeddingsService;
   private vssAvailable: boolean = false;
 
   constructor(
     dbInstance: Database.Database, 
-    embeddingModel: string = 'nomic-embed-text',
-    ollamaInstance?: Ollama
+    embeddingsService: EmbeddingsService
   ) {
     if (!dbInstance) {
       throw new Error('Database instance is required');
     }
+    if (!embeddingsService) {
+      throw new Error('EmbeddingsService instance is required');
+    }
     this.db = dbInstance;
-    this.ollama = ollamaInstance || new Ollama(); // Use provided instance or create new one
-    this.embeddingModel = embeddingModel;
+    this.embeddingsService = embeddingsService;
     
     // Check if VSS extension is available
     try {
@@ -72,32 +73,21 @@ export class CrudRepository {
     }
   }
 
-  // Generate embedding using Ollama
-  private async generateEmbedding(text: string): Promise<number[]> {
-    try {
-      console.log(`🔮 Generating embedding for text using model: ${this.embeddingModel}`);
-      
-      const response = await this.ollama.embeddings({
-        model: this.embeddingModel,
-        prompt: text.trim().substring(0, 4000)
-      });
-      
-      console.log(`✅ Embedding generated successfully (${response.embedding.length} dimensions)`);
-      return response.embedding;
-    } catch (error) {
-      console.error('❌ Error generating embedding with Ollama:', error);
-      throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+  // Public method to generate embeddings for search queries
+  async generateQueryEmbedding(text: string): Promise<number[]> {
+    return this.embeddingsService.generateQueryEmbedding(text);
+  }
+
+  // Get the embeddings service instance
+  getEmbeddingsService(): EmbeddingsService {
+    return this.embeddingsService;
   }
 
   // Insert a document with its vector embedding (generated using Ollama)
   async insertDocument( title: string, content: string,  category?: string, tags?: string[] ): Promise<number> {
     try {
-      // Generate embedding using Ollama - include all metadata for richer embeddings
-      const categoryText = category ? `\nCategory: ${category}` : '';
-      const tagsText = tags && tags.length > 0 ? `\nTags: ${tags.join(', ')}` : '';
-      const combinedText = `${title}\n\n${content}${categoryText}${tagsText}`;
-      const embedding = await this.generateEmbedding(combinedText);
+      // Generate embedding using EmbeddingsService - include all metadata for richer embeddings
+      const embedding = await this.embeddingsService.generateDocumentEmbedding(title, content, category, tags);
 
       const tagsString = tags ? tags.join(', ') : null;
 

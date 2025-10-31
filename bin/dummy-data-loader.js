@@ -129,31 +129,4 @@ async function insertDummyDataToDatabase(dbRepo) {
         throw error;
     }
 }
-// ========================================
-// MAIN EXECUTION (when run directly)
-// ========================================
-async function main() {
-    if (require.main === module) {
-        try {
-            console.log('🚀 Starting dummy data loader...');
-            // Import required dependencies
-            const { connectDB } = await Promise.resolve().then(() => __importStar(require('./create-db')));
-            const { CrudRepository } = await Promise.resolve().then(() => __importStar(require('./crud.repo')));
-            // Connect to database
-            const dbInstance = connectDB();
-            const crudRepo = new CrudRepository(dbInstance);
-            // Insert dummy data
-            const insertedCount = await insertDummyDataToDatabase(crudRepo);
-            console.log(`🎉 Dummy data loading completed! Inserted ${insertedCount} documents.`);
-            // Close database connection
-            dbInstance.close();
-        }
-        catch (error) {
-            console.error('❌ Error in main execution:', error);
-            process.exit(1);
-        }
-    }
-}
-// Execute main if this file is run directly
-main().catch(console.error);
 //# sourceMappingURL=dummy-data-loader.js.map

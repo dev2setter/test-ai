@@ -1,5 +1,6 @@
 import { connectDB } from './create-db';
 import { CrudRepository } from './crud.repo';
+import { EmbeddingsService } from './embeddings.service';
 
 // Example usage - call createDB when you need it
 async function main(): Promise<void> {
@@ -8,7 +9,12 @@ async function main(): Promise<void> {
   try {
     // Call connectDB to connect to the persistent database
     const dbInstance = connectDB(); // Always uses database.db
-    const db = new CrudRepository(dbInstance, 'nomic-embed-text');
+    
+    // Create embeddings service
+    const embeddingsService = new EmbeddingsService('nomic-embed-text');
+    
+    // Create CRUD repository with embeddings service
+    const db = new CrudRepository(dbInstance, embeddingsService);
     
     console.log('\n🎯 Database is ready! You can now:');
     console.log('   - Insert documents');

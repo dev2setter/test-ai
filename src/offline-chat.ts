@@ -5,6 +5,7 @@
 import { Ollama } from 'ollama';
 import { CrudRepository } from './crud.repo';
 import { SearchRepository } from './search.repo';
+import { EmbeddingsService } from './embeddings.service';
 
 // ========================================
 // OLLAMA CLIENT INTERFACE
@@ -473,7 +474,12 @@ export async function startOfflineDatabaseChat(): Promise<void> {
 
     // Initialize database and repositories
     const dbInstance = connectDB();
-    const crudRepo = new CrudRepository(dbInstance);
+    
+    // Create embeddings service
+    const embeddingsService = new EmbeddingsService('nomic-embed-text');
+    
+    // Create repositories
+    const crudRepo = new CrudRepository(dbInstance, embeddingsService);
     const searchRepo = new SearchRepository(dbInstance);
     
     // Check if database has documents

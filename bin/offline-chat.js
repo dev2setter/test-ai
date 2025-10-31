@@ -42,6 +42,7 @@ exports.startOfflineDatabaseChat = startOfflineDatabaseChat;
 const ollama_1 = require("ollama");
 const crud_repo_1 = require("./crud.repo");
 const search_repo_1 = require("./search.repo");
+const embeddings_service_1 = require("./embeddings.service");
 // ========================================
 // OLLAMA SETUP CHECKER
 // ========================================
@@ -402,7 +403,10 @@ async function startOfflineDatabaseChat() {
         console.log('✅ Ollama setup is complete!\n');
         // Initialize database and repositories
         const dbInstance = connectDB();
-        const crudRepo = new crud_repo_1.CrudRepository(dbInstance);
+        // Create embeddings service
+        const embeddingsService = new embeddings_service_1.EmbeddingsService('nomic-embed-text');
+        // Create repositories
+        const crudRepo = new crud_repo_1.CrudRepository(dbInstance, embeddingsService);
         const searchRepo = new search_repo_1.SearchRepository(dbInstance);
         // Check if database has documents
         const stats = crudRepo.getStats();

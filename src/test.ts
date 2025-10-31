@@ -1,6 +1,7 @@
 import { connectDB } from './create-db';
 import { CrudRepository } from './crud.repo';
 import { SearchRepository } from './search.repo';
+import { EmbeddingsService } from './embeddings.service';
 import { 
   insertDummyDataToDatabase, 
   getDummyDataStats
@@ -19,8 +20,11 @@ async function runTests(): Promise<void> {
     // Create/connect to database (always uses database.db)
     const dbInstance = connectDB();
     
+    // Create embeddings service
+    const embeddingsService = new EmbeddingsService('nomic-embed-text');
+    
     // Create repository instances
-    crudRepo = new CrudRepository(dbInstance);
+    crudRepo = new CrudRepository(dbInstance, embeddingsService);
     searchRepo = new SearchRepository(dbInstance);
     
     // If database is new or empty, load dummy data
@@ -62,11 +66,10 @@ async function runTests(): Promise<void> {
     // Test 3: Vector similarity search (using real Ollama embedding)
     console.log('Test 3: Vector similarity search');
     
-    // Generate a real embedding for search query using the same model
-    const tempRepo = new CrudRepository(dbInstance, 'nomic-embed-text');
+    // Generate a real embedding for search query using the existing repository
     const queryText = "machine learning and artificial intelligence";
     console.log('🔮 Generating query embedding with Ollama...');
-    const queryEmbedding = await (tempRepo as any).generateEmbedding(queryText);
+    const queryEmbedding = await crudRepo.generateQueryEmbedding(queryText);
     
     const similarDocs = searchRepo.searchSimilar(queryEmbedding, 5);
     if (similarDocs.length > 0) {

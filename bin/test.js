@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const create_db_1 = require("./create-db");
 const crud_repo_1 = require("./crud.repo");
 const search_repo_1 = require("./search.repo");
+const embeddings_service_1 = require("./embeddings.service");
 const dummy_data_loader_1 = require("./dummy-data-loader");
 async function runTests() {
     console.log('🧪 Running SQLite VSS Tests...\n');
@@ -13,8 +14,10 @@ async function runTests() {
         console.log('Test 1: Database Initialization and Data Loading');
         // Create/connect to database (always uses database.db)
         const dbInstance = (0, create_db_1.connectDB)();
+        // Create embeddings service
+        const embeddingsService = new embeddings_service_1.EmbeddingsService('nomic-embed-text');
         // Create repository instances
-        crudRepo = new crud_repo_1.CrudRepository(dbInstance);
+        crudRepo = new crud_repo_1.CrudRepository(dbInstance, embeddingsService);
         searchRepo = new search_repo_1.SearchRepository(dbInstance);
         // If database is new or empty, load dummy data
         const stats = crudRepo.getStats();
@@ -47,11 +50,10 @@ async function runTests() {
         }
         // Test 3: Vector similarity search (using real Ollama embedding)
         console.log('Test 3: Vector similarity search');
-        // Generate a real embedding for search query using the same model
-        const tempRepo = new crud_repo_1.CrudRepository(dbInstance, 'nomic-embed-text');
+        // Generate a real embedding for search query using the existing repository
         const queryText = "machine learning and artificial intelligence";
         console.log('🔮 Generating query embedding with Ollama...');
-        const queryEmbedding = await tempRepo.generateEmbedding(queryText);
+        const queryEmbedding = await crudRepo.generateQueryEmbedding(queryText);
         const similarDocs = searchRepo.searchSimilar(queryEmbedding, 5);
         if (similarDocs.length > 0) {
             console.log(`✅ PASSED - Found ${similarDocs.length} similar document(s) for: "${queryText}"`);

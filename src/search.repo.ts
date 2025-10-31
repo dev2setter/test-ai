@@ -262,7 +262,7 @@ export class SearchRepository {
   }
 
   // Advanced text search with multiple terms
-  searchByTextAdvanced(searchTerms: string[], operator: 'AND' | 'OR' = 'OR', limit: number = 10): Document[] {
+   searchByTextAdvanced(searchTerms: string[], operator: 'AND' | 'OR' = 'OR', limit: number = 10): Document[] {
     try {
       const conditions: string[] = [];
       const params: string[] = [];
@@ -289,7 +289,7 @@ export class SearchRepository {
       console.error('❌ Error in advanced text search:', error);
       throw error;
     }
-  }
+  } 
 
   // Hybrid search: combine text search and semantic search
   hybridSearch(
