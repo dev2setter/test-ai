@@ -11,7 +11,7 @@
     "dev": "npm run build:watch",
     "test": "npm run build && node bin/test.js",
     "chat": "npm run build && node bin/chat-interface.js",
-    "offline-chat": "npm run build && node bin/offline-chat-simple.js",
+    "offline-chat": "npm run build && node bin/offline-chat.js",
     "api-demo": "npm run build && node bin/offline-llm-api.js"
   },
   "keywords": [

@@ -192,6 +192,12 @@ IMPORTANT INSTRUCTIONS:
 - Keep responses concise but helpful
 - Be conversational and friendly
 
+SPECIAL DATABASE CAPABILITIES:
+- When users ask about "categories", "what categories do you have", "list categories", etc., you should respond with: "I can show you the available categories. Let me retrieve them from the database."
+- When users ask about "tags", "what tags do you have", "list tags", "get all tags", etc., you should respond with the available tags from the database.
+- When users ask for documents from a specific category (like "Cloud documents", "AI/ML papers", etc.), search for those specifically
+- You have access to categorized documents with metadata including categories and tags
+
 You are running completely offline with no internet access.`
     });
   }
@@ -209,6 +215,69 @@ You are running completely offline with no internet access.`
         content: userMessage,
         timestamp: new Date()
       });
+
+      // Check for specific category document requests
+      const lowerMessage = userMessage.toLowerCase();
+      
+      // Check for Cloud category specific requests (keep this one as example)
+      if (lowerMessage.includes('cloud') && (lowerMessage.includes('documents') || lowerMessage.includes('category'))) {
+        console.log('📂 Detected Cloud category search - retrieving from database...');
+        
+        try {
+          const documents = this.crudRepo.getDocumentsByCategory('Cloud');
+          
+          if (documents.length > 0) {
+            const docList = documents.map((doc, i) => 
+              `${i + 1}. **${doc.title}**\n   ${doc.content.substring(0, 200)}${doc.content.length > 200 ? '...' : ''}`
+            ).join('\n\n');
+            
+            const message = `Found ${documents.length} document(s) in the "Cloud" category:\n\n${docList}`;
+            
+            // Add assistant response to history
+            this.conversationHistory.push({
+              role: 'assistant',
+              content: message,
+              timestamp: new Date(),
+              searchResults: documents
+            });
+
+            const responseTime = Date.now() - startTime;
+
+            return {
+              message,
+              searchResults: documents,
+              sources: documents.map(doc => doc.title),
+              confidence: 100,
+              model: this.chatModel,
+              responseTime
+            };
+          } else {
+            const message = 'No documents found in the "Cloud" category.';
+            
+            // Add assistant response to history
+            this.conversationHistory.push({
+              role: 'assistant',
+              content: message,
+              timestamp: new Date(),
+              searchResults: []
+            });
+
+            const responseTime = Date.now() - startTime;
+
+            return {
+              message,
+              searchResults: [],
+              sources: [],
+              confidence: 100,
+              model: this.chatModel,
+              responseTime
+            };
+          }
+        } catch (error) {
+          console.error('❌ Error searching Cloud category:', error);
+          // Fall through to normal search
+        }
+      }
 
       // Step 1: Generate embedding for the user's question (offline)
       console.log('🔍 Searching database with offline embeddings...');
@@ -228,10 +297,32 @@ You are running completely offline with no internet access.`
       // Step 5: Prepare context for LLM
       const context = this.prepareContext(allResults);
       
-      // Step 6: Generate LLM response (offline)
-      const llmResponse = await this.generateOfflineLLMResponse(userMessage, context);
+      // Step 6: Check if this might be a categories or tags request and enhance context
+      let enhancedContext = context;
+      if (lowerMessage.includes('categor')) {
+        try {
+          const categories = this.crudRepo.getAllCategories();
+          const categoryInfo = `\nAVAILABLE CATEGORIES IN DATABASE:\n${categories.map((cat, i) => `${i + 1}. ${cat}`).join('\n')}\n\nTotal categories: ${categories.length}\n`;
+          enhancedContext = categoryInfo + '\n' + context;
+        } catch (error) {
+          console.log('Could not retrieve categories for context');
+        }
+      }
       
-      // Step 7: Add assistant response to history
+      if (lowerMessage.includes('tag')) {
+        try {
+          const tags = this.crudRepo.getAllTags();
+          const tagInfo = `\nAVAILABLE TAGS IN DATABASE:\n${tags.join(', ')}\n\nTotal tags: ${tags.length}\n`;
+          enhancedContext = tagInfo + '\n' + enhancedContext;
+        } catch (error) {
+          console.log('Could not retrieve tags for context');
+        }
+      }
+      
+      // Step 7: Generate LLM response (offline)
+      const llmResponse = await this.generateOfflineLLMResponse(userMessage, enhancedContext);
+      
+      // Step 8: Add assistant response to history
       this.conversationHistory.push({
         role: 'assistant',
         content: llmResponse.message,

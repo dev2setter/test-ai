@@ -247,6 +247,75 @@ export class CrudRepository {
     }
   }
 
+  // Get all unique categories from documents
+  getAllCategories(): string[] {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT DISTINCT category 
+        FROM documents 
+        WHERE category IS NOT NULL AND category != ''
+        ORDER BY category
+      `);
+      
+      const results = stmt.all() as { category: string }[];
+      return results.map(row => row.category);
+    } catch (error) {
+      console.error('❌ Error getting categories:', error);
+      throw error;
+    }
+  }
+
+  // Get all unique tags from documents
+  getAllTags(): string[] {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT DISTINCT tags 
+        FROM documents 
+        WHERE tags IS NOT NULL AND tags != ''
+      `);
+      
+      const results = stmt.all() as { tags: string }[];
+      const allTags = new Set<string>();
+      
+      // Parse tags from JSON arrays and flatten
+      results.forEach(row => {
+        try {
+          const tags = JSON.parse(row.tags);
+          if (Array.isArray(tags)) {
+            tags.forEach(tag => allTags.add(tag));
+          }
+        } catch (e) {
+          // Handle cases where tags might not be JSON
+          if (row.tags) {
+            allTags.add(row.tags);
+          }
+        }
+      });
+      
+      return Array.from(allTags).sort();
+    } catch (error) {
+      console.error('❌ Error getting tags:', error);
+      throw error;
+    }
+  }
+
+  // Get documents by category
+  getDocumentsByCategory(category: string): Document[] {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT id, title, content, category, tags, created_at 
+        FROM documents 
+        WHERE category = ?
+        ORDER BY created_at DESC
+      `);
+      
+      return stmt.all(category) as Document[];
+    } catch (error) {
+      console.error('❌ Error getting documents by category:', error);
+      throw error;
+    }
+  }
+
   // Get embedding for a specific document
   getEmbeddingByDocumentId(documentId: number): number[] | null {
     try {

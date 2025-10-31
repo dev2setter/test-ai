@@ -31,6 +31,21 @@ export declare class OfflineLLMAPI {
     getHistory(): any[];
     clearHistory(): boolean;
     isReady(): boolean;
+    getCategories(): Promise<{
+        success: boolean;
+        categories?: string[];
+        error?: string;
+    }>;
+    getTags(): Promise<{
+        success: boolean;
+        tags?: string[];
+        error?: string;
+    }>;
+    getDocumentsByCategory(category: string): Promise<{
+        success: boolean;
+        documents?: any[];
+        error?: string;
+    }>;
 }
 export declare function demonstrateOfflineLLMAPI(): Promise<void>;
 //# sourceMappingURL=offline-llm-api.d.ts.map

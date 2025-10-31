@@ -7,7 +7,7 @@ import { connectDB } from './create-db';
 import { CrudRepository } from './crud.repo';
 import { SearchRepository } from './search.repo';
 import { EmbeddingsService } from './embeddings.service';
-import { OfflineChatService } from './offline-chat-simple';
+import { OfflineDatabaseChatService } from './offline-chat';
 
 // ========================================
 // OFFLINE LLM API CLASS
@@ -16,7 +16,7 @@ import { OfflineChatService } from './offline-chat-simple';
 export class OfflineLLMAPI {
   private crudRepo: CrudRepository;
   private searchRepo: SearchRepository;
-  private chatService?: OfflineChatService;
+  private chatService?: OfflineDatabaseChatService;
 
   constructor() {
     // Initialize database and repositories
@@ -33,11 +33,11 @@ export class OfflineLLMAPI {
   // Initialize offline chat (requires Ollama)
   async initialize(): Promise<boolean> {
     try {
-      this.chatService = new OfflineChatService(this.searchRepo, this.crudRepo);
+      this.chatService = new OfflineDatabaseChatService(this.searchRepo, this.crudRepo);
       
       // Check if Ollama is available
-      const available = await this.chatService.isAvailable();
-      if (!available) {
+      const availability = await this.chatService.checkAvailability();
+      if (!availability.ollama || !availability.chatModel || !availability.embeddingModel) {
         console.error('❌ Ollama is not ready');
         console.log('💡 Run: ollama serve');
         console.log('💡 Install models: ollama pull llama3.2:3b && ollama pull nomic-embed-text');
@@ -103,8 +103,9 @@ export class OfflineLLMAPI {
         };
       }
 
-      // Generate embedding for search
-      const embedding = await (this.chatService as any).generateEmbedding(query);
+      // Generate embedding for search using the embeddings service
+      const embeddingsService = new EmbeddingsService('nomic-embed-text');
+      const embedding = await embeddingsService.generateEmbedding(query);
       const results = this.searchRepo.searchSimilar(embedding, limit);
       
       return {
@@ -191,6 +192,66 @@ export class OfflineLLMAPI {
   isReady(): boolean {
     return !!this.chatService;
   }
+
+  // Get all available categories
+  async getCategories(): Promise<{
+    success: boolean;
+    categories?: string[];
+    error?: string;
+  }> {
+    try {
+      const categories = this.crudRepo.getAllCategories();
+      return {
+        success: true,
+        categories
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Get all available tags
+  async getTags(): Promise<{
+    success: boolean;
+    tags?: string[];
+    error?: string;
+  }> {
+    try {
+      const tags = this.crudRepo.getAllTags();
+      return {
+        success: true,
+        tags
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Get documents by category
+  async getDocumentsByCategory(category: string): Promise<{
+    success: boolean;
+    documents?: any[];
+    error?: string;
+  }> {
+    try {
+      const documents = this.crudRepo.getDocumentsByCategory(category);
+      return {
+        success: true,
+        documents
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 }
 
 // ========================================
@@ -216,6 +277,34 @@ export async function demonstrateOfflineLLMAPI(): Promise<void> {
     const statsResult = await api.getStats();
     if (statsResult.success) {
       console.log('📊 Database stats:', statsResult.stats);
+    }
+
+    // Get all categories
+    console.log('\n📂 Available categories:');
+    const categoriesResult = await api.getCategories();
+    if (categoriesResult.success && categoriesResult.categories) {
+      if (categoriesResult.categories.length > 0) {
+        categoriesResult.categories.forEach((category, i) => {
+          console.log(`   ${i + 1}. ${category}`);
+        });
+      } else {
+        console.log('   No categories found');
+      }
+    } else {
+      console.log('❌ Categories error:', categoriesResult.error);
+    }
+
+    // Get all tags
+    console.log('\n🏷️  Available tags:');
+    const tagsResult = await api.getTags();
+    if (tagsResult.success && tagsResult.tags) {
+      if (tagsResult.tags.length > 0) {
+        console.log(`   ${tagsResult.tags.join(', ')}`);
+      } else {
+        console.log('   No tags found');
+      }
+    } else {
+      console.log('❌ Tags error:', tagsResult.error);
     }
 
     // Example chat
